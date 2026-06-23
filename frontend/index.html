@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>英语词汇量估算工具</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>英语词汇量估算工具</h1>
+      <p class="subtitle">分层抽样 · 区间估计 · 90% 置信度</p>
+    </header>
+
+    <main>
+      <section id="home-view" class="card">
+        <h2>开始测试</h2>
+        <p>系统会从不同词频层级抽取单词，请判断你是否认识该词。</p>
+        <button id="start-btn" class="btn primary">开始词汇测试</button>
+        <button id="batch-btn" class="btn secondary">查看四类学习者估算</button>
+      </section>
+
+      <section id="test-view" class="card hidden">
+        <div class="progress">
+          <span id="progress-text">第 1 / 50 题</span>
+          <div class="progress-bar"><div id="progress-fill"></div></div>
+        </div>
+        <div class="question-box">
+          <p class="level-tag">Level <span id="question-level">1</span></p>
+          <h2 id="question-word">word</h2>
+          <p id="question-definition" class="definition"></p>
+        </div>
+        <div class="actions">
+          <button class="btn success answer-btn" data-response="know">认识</button>
+          <button class="btn warning answer-btn" data-response="unsure">不确定</button>
+          <button class="btn danger answer-btn" data-response="unknown">不认识</button>
+        </div>
+      </section>
+
+      <section id="result-view" class="card hidden">
+        <h2>估算结果</h2>
+        <p id="result-summary" class="result-summary"></p>
+        <div class="result-grid">
+          <div class="metric">
+            <span class="label">点估计</span>
+            <strong id="point-estimate">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">区间下限</span>
+            <strong id="lower-bound">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">区间上限</span>
+            <strong id="upper-bound">0</strong>
+          </div>
+        </div>
+        <table id="breakdown-table">
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>词频范围</th>
+              <th>认识率</th>
+              <th>估算掌握词数</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <button id="restart-btn" class="btn primary">重新测试</button>
+      </section>
+
+      <section id="batch-view" class="card hidden">
+        <h2>四类学习者批量估算</h2>
+        <table id="batch-table">
+          <thead>
+            <tr>
+              <th>类型</th>
+              <th>点估计</th>
+              <th>区间</th>
+              <th>置信度</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <button id="back-home-btn" class="btn secondary">返回首页</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

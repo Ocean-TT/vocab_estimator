@@ -1,0 +1,15 @@
+"""内存中的测试会话题目缓存（骨架实现，生产环境可改为 Redis 或数据库）。"""
+
+from backend.services.sampler import QuestionItem
+
+_SESSION_QUESTIONS: dict[int, list[QuestionItem]] = {}
+
+
+def get_session_questions(session_id: int, questions: list[QuestionItem] | None = None):
+    if questions is not None:
+        _SESSION_QUESTIONS[session_id] = questions
+    return _SESSION_QUESTIONS.get(session_id, [])
+
+
+def save_answer(session_id: int, answer) -> None:
+    del session_id, answer
