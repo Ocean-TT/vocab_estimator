@@ -62,3 +62,11 @@ class BatchEstimateItem(BaseModel):
 
 class BatchEstimateResponse(BaseModel):
     results: list[BatchEstimateItem]
+
+class BatchAnswer(BaseModel):
+    word: str
+    known: bool
+
+class RealBatchRequest(BaseModel):
+    answers: list[BatchAnswer]
+    algorithm: str

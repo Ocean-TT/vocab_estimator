@@ -5,6 +5,9 @@ from backend.config import CONFIDENCE_Z, LEVEL_RANGES
 from backend.database import get_db
 from backend.schemas import BatchEstimateItem, BatchEstimateResponse, BatchProfile
 from backend.services.estimator import level_total_words
+from backend.models.entities import Word
+from backend.schemas import RealBatchRequest # 刚才定义的
+from backend.services.estimator import estimate_from_level_responses
 
 router = APIRouter(prefix="/api/batch", tags=["batch"])
 
@@ -49,8 +52,18 @@ def batch_estimate(profiles: list[BatchProfile] | None = None, db: Session = Dep
     results = [_simulate_profile(profile) for profile in selected]
     return BatchEstimateResponse(results=results)
 
-
 @router.get("/estimate/default", response_model=BatchEstimateResponse)
 def batch_estimate_default():
     results = [_simulate_profile(profile) for profile in DEFAULT_PROFILES]
     return BatchEstimateResponse(results=results)
+
+@router.post("/estimate-from-words", response_model=EstimationResult) # 注意返回模型
+def estimate_from_real_words(payload: RealBatchRequest, db: Session = Depends(get_db)):
+    level_responses = {l[0]: [] for l in LEVEL_RANGES}
+    
+    for item in payload.answers:
+        word_obj = db.query(Word).filter(Word.word == item.word.lower().strip()).first()
+        if word_obj:
+            level_responses[word_obj.level].append(item.known)
+
+    return estimate_from_level_responses(level_responses)

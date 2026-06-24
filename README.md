@@ -54,18 +54,26 @@ python backend\scripts\seed_words.py
 uvicorn backend.main:app --reload
 ```
 
-浏览器访问：<http://127.0.0.1:8000>
+浏览器访问：[http://127.0.0.1:8000](http://127.0.0.1:8000)
 
-API 文档：<http://127.0.0.1:8000/docs>
+API 文档：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
 ## 主要 API
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/test/start` | 开始测试 |
-| POST | `/api/test/{session_id}/answer` | 提交答案 |
-| GET | `/api/test/{session_id}/result` | 获取估算结果 |
-| GET | `/api/batch/estimate/default` | 四类学习者批量估算 |
+
+| 方法   | 路径                              | 说明        |
+| ---- | ------------------------------- | --------- |
+| POST | `/api/test/start`               | 开始测试      |
+| POST | `/api/test/{session_id}/answer` | 提交答案      |
+| GET  | `/api/test/{session_id}/result` | 获取估算结果    |
+| GET  | `/api/batch/estimate/default`   | 四类学习者批量估算 |
+
+
+## 改进计划
+
+对照课程完整要求，当前骨架尚有较多待完善项（词表、多算法、批量 API、验证对比、学生实测与四六级相关分析等）。详见：
+
+**[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)**
 
 ## 后续可扩展
 
@@ -77,11 +85,14 @@ API 文档：<http://127.0.0.1:8000/docs>
 
 ## 团队分工建议
 
-| 模块 | 建议负责人 |
-|------|------------|
-| 总体架构 | 1 人 |
-| 算法与验证 | 1–2 人 |
-| 前端 UI | 1–2 人 |
-| 数据库与词表 | 1 人 |
-| 测试与批量脚本 | 1 人 |
-| 报告撰写 | 1 人 |
+
+| 模块      | 建议负责人 |
+| ------- | ----- |
+| 总体架构    | 1 人   |
+| 算法与验证   | 1–2 人 |
+| 前端 UI   | 1–2 人 |
+| 数据库与词表  | 1 人   |
+| 测试与批量脚本 | 1 人   |
+| 报告撰写    | 1 人   |
+
+
