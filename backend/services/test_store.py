@@ -1,4 +1,4 @@
-"""内存中的测试会话题目缓存（骨架实现，生产环境可改为 Redis 或数据库）。"""
+"""缓存我们测试中抽取到的单词"""
 
 from backend.services.sampler import QuestionItem
 

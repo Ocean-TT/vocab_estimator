@@ -124,7 +124,7 @@ def get_result(session_id: int, db: Session = Depends(get_db)):
                 "rank_start": item.rank_start,
                 "rank_end": item.rank_end,
                 "total_words": item.total_words,
-                "known_words": item.known_words,
+                "known_words": item.estimated_known_words,
                 "recognition_rate": item.recognition_rate,
             }
             for item in result.level_breakdown

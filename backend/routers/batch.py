@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.config import CONFIDENCE_Z, LEVEL_RANGES
 from backend.database import get_db
-from backend.schemas import BatchEstimateItem, BatchEstimateResponse, BatchProfile
-from backend.services.estimator import level_total_words
+from backend.schemas import (
+    BatchEstimateItem,
+    BatchEstimateResponse,
+    BatchProfile,
+    RealBatchRequest,
+    RealBatchResultResponse,
+    RealBatchLevelBreakdown,
+)
+from backend.services.estimator import estimate_from_level_responses, level_total_words
 from backend.models.entities import Word
-from backend.schemas import RealBatchRequest # 刚才定义的
-from backend.services.estimator import estimate_from_level_responses
 
 router = APIRouter(prefix="/api/batch", tags=["batch"])
 
@@ -52,18 +57,78 @@ def batch_estimate(profiles: list[BatchProfile] | None = None, db: Session = Dep
     results = [_simulate_profile(profile) for profile in selected]
     return BatchEstimateResponse(results=results)
 
+
 @router.get("/estimate/default", response_model=BatchEstimateResponse)
 def batch_estimate_default():
     results = [_simulate_profile(profile) for profile in DEFAULT_PROFILES]
     return BatchEstimateResponse(results=results)
 
-@router.post("/estimate-from-words", response_model=EstimationResult) # 注意返回模型
-def estimate_from_real_words(payload: RealBatchRequest, db: Session = Depends(get_db)):
-    level_responses = {l[0]: [] for l in LEVEL_RANGES}
-    
-    for item in payload.answers:
-        word_obj = db.query(Word).filter(Word.word == item.word.lower().strip()).first()
-        if word_obj:
-            level_responses[word_obj.level].append(item.known)
 
-    return estimate_from_level_responses(level_responses)
+@router.post("/estimate-from-words", response_model=RealBatchResultResponse)
+def estimate_from_real_words(payload: RealBatchRequest, db: Session = Depends(get_db)):
+    if not payload.answers:
+        raise HTTPException(status_code=400, detail="答题列表不能为空")
+
+    level_responses: dict[int, list[bool]] = {lvl: [] for lvl, _, _ in LEVEL_RANGES}
+    level_sampled: dict[int, int] = {lvl: 0 for lvl, _, _ in LEVEL_RANGES}
+    level_known: dict[int, int] = {lvl: 0 for lvl, _, _ in LEVEL_RANGES}
+    level_unknown_words: dict[int, list[str]] = {lvl: [] for lvl, _, _ in LEVEL_RANGES}
+    unmatched_words: list[str] = []
+    matched_count = 0
+
+    for item in payload.answers:
+        word_lower = item.word.strip().lower()
+        if not word_lower:
+            continue
+        word_obj = db.query(Word).filter(Word.word == word_lower).first()
+        if word_obj is None:
+            unmatched_words.append(item.word)
+            continue
+
+        matched_count += 1
+        lvl = word_obj.level
+        level_responses[lvl].append(item.known)
+        level_sampled[lvl] += 1
+        if item.known:
+            level_known[lvl] += 1
+        else:
+            level_unknown_words[lvl].append(item.word)
+
+    if matched_count == 0:
+        raise HTTPException(status_code=400, detail="没有匹配到任何单词，请检查输入的单词是否正确")
+
+    result = estimate_from_level_responses(level_responses)
+
+    level_breakdown: list[RealBatchLevelBreakdown] = []
+    for item in result.level_breakdown:
+        level_breakdown.append(
+            RealBatchLevelBreakdown(
+                level=item.level,
+                rank_start=item.rank_start,
+                rank_end=item.rank_end,
+                total_words=item.total_words,
+                sampled_count=level_sampled.get(item.level, 0),
+                known_count=level_known.get(item.level, 0),
+                recognition_rate=item.recognition_rate,
+                estimated_known_words=item.estimated_known_words,
+                unknown_words=level_unknown_words.get(item.level, []),
+            )
+        )
+
+    summary = (
+        f"输入 {len(payload.answers)} 个单词，匹配 {matched_count} 个，"
+        f"估计词汇量 {result.lower_bound}-{result.upper_bound} 词，"
+        f"点估计 {result.point_estimate} 词，"
+        f"置信度 {int(result.confidence_level * 100)}%"
+    )
+
+    return RealBatchResultResponse(
+        point_estimate=result.point_estimate,
+        lower_bound=result.lower_bound,
+        upper_bound=result.upper_bound,
+        confidence_level=result.confidence_level,
+        summary=summary,
+        level_breakdown=level_breakdown,
+        matched_count=matched_count,
+        unmatched_words=unmatched_words,
+    )

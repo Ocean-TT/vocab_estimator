@@ -23,8 +23,11 @@
       </section>
 
       <section id="test-view" class="card hidden">
+        <div class="test-header">
+          <button id="test-exit-btn" class="btn-text">← 返回首页</button>
+          <span class="progress-text-inline" id="progress-text">第 1 / 50 题</span>
+        </div>
         <div class="progress">
-          <span id="progress-text">第 1 / 50 题</span>
           <div class="progress-bar"><div id="progress-fill"></div></div>
         </div>
         <div class="question-box">
@@ -84,6 +87,60 @@
           <tbody></tbody>
         </table>
         <button id="back-home-btn" class="btn secondary">返回首页</button>
+      </section>
+
+      <section id="real-batch-view" class="card hidden">
+        <h2>真实批量估算</h2>
+        <p>输入单词列表并标注是否认识，系统将基于词频分层估算词汇量。</p>
+        <p class="hint">格式：每行一个单词，认识的单词前加 <code>+</code>，不认识的加 <code>-</code>。例如：</p>
+        <pre class="example">+ the
++ apple
+- ambiguous
++ beautiful
+- sophisticated</pre>
+        <textarea id="batch-input" rows="12" placeholder="请输入单词列表..."></textarea>
+        <div class="actions">
+          <button id="real-batch-submit-btn" class="btn primary">开始估算</button>
+          <button id="real-batch-back-btn" class="btn secondary">返回首页</button>
+        </div>
+      </section>
+
+      <section id="real-batch-result-view" class="card hidden">
+        <h2>批量估算结果</h2>
+        <p id="real-batch-summary" class="result-summary"></p>
+        <div class="result-grid">
+          <div class="metric">
+            <span class="label">点估计</span>
+            <strong id="real-point-estimate">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">区间下限</span>
+            <strong id="real-lower-bound">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">区间上限</span>
+            <strong id="real-upper-bound">0</strong>
+          </div>
+        </div>
+        <h3>各层级明细</h3>
+        <table id="real-batch-breakdown-table">
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>词频范围</th>
+              <th>抽样数</th>
+              <th>认识数</th>
+              <th>认识率</th>
+              <th>估算掌握词数</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div id="unmatched-section" class="hidden">
+          <h3>未匹配的单词</h3>
+          <p id="unmatched-words" class="unmatched"></p>
+        </div>
+        <button id="real-batch-restart-btn" class="btn primary">再测一次</button>
       </section>
     </main>
   </div>
