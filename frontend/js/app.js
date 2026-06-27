@@ -2,9 +2,13 @@ const views = {
   home: document.getElementById("home-view"),
   test: document.getElementById("test-view"),
   result: document.getElementById("result-view"),
+  "cat-test": document.getElementById("cat-test-view"),
+  "cat-result": document.getElementById("cat-result-view"),
   batch: document.getElementById("batch-view"),
   "real-batch": document.getElementById("real-batch-view"),
   "real-batch-result": document.getElementById("real-batch-result-view"),
+  "text": document.getElementById("text-view"),
+  "text-result": document.getElementById("text-result-view"),
 };
 
 let sessionId = null;
@@ -245,4 +249,162 @@ document.getElementById("real-batch-submit-btn").addEventListener("click", () =>
 
 document.getElementById("real-batch-restart-btn").addEventListener("click", () => {
   showView("real-batch");
+});
+
+// ============== 文章分析 ==============
+
+const LEVEL_RANGES = [
+  [1, 1, 1000],
+  [2, 1001, 3000],
+  [3, 3001, 6000],
+  [4, 6001, 10000],
+  [5, 10001, 20000],
+];
+
+function getLevelRange(level) {
+  const range = LEVEL_RANGES.find(r => r[0] === level);
+  return range ? `${range[1]}-${range[2]}` : "-";
+}
+
+function renderTextResult(data) {
+  document.getElementById("text-stats-summary").textContent =
+    `文档共 ${data.total_words} 个不同单词，其中 ${data.matched_words} 个可识别词频等级`;
+
+  const est = data.vocab_estimate;
+  document.getElementById("text-point-estimate").textContent = est.point_estimate;
+  document.getElementById("text-lower-bound").textContent = est.lower_bound;
+  document.getElementById("text-upper-bound").textContent = est.upper_bound;
+  document.getElementById("text-explanation").textContent = est.explanation;
+
+  showView("text-result");
+}
+
+async function submitTextAnalysis() {
+  const text = document.getElementById("text-input").value.trim();
+  if (!text) {
+    alert("请输入要分析的英文文档");
+    return;
+  }
+  const confidence = parseInt(document.getElementById("text-confidence").value) / 100;
+  
+  try {
+    const data = await api("/api/text/analyze", {
+      method: "POST",
+      body: JSON.stringify({ text, min_recognition_rate: confidence }),
+    });
+    renderTextResult(data);
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+document.getElementById("text-btn").addEventListener("click", () => {
+  showView("text");
+});
+
+document.getElementById("text-submit-btn").addEventListener("click", () => {
+  submitTextAnalysis();
+});
+
+document.getElementById("text-back-btn").addEventListener("click", () => {
+  showView("home");
+});
+
+document.getElementById("text-confidence").addEventListener("input", (e) => {
+  document.getElementById("text-confidence-value").textContent = `${e.target.value}%`;
+});
+
+document.getElementById("text-restart-btn").addEventListener("click", () => {
+  document.getElementById("text-input").value = "";
+  document.getElementById("text-confidence").value = 85;
+  document.getElementById("text-confidence-value").textContent = "85%";
+  showView("text");
+});
+
+// ============== IRT-CAT 自适应测试 ==============
+
+let catSessionId = null;
+let catCurrentQuestion = null;
+let catItemsAnswered = 0;
+const CAT_MAX_ITEMS = 25;
+
+function renderCatQuestion(question, itemsAnswered) {
+  catCurrentQuestion = question;
+  catItemsAnswered = itemsAnswered;
+  const progress = Math.min(itemsAnswered / CAT_MAX_ITEMS, 1);
+  document.getElementById("cat-progress-text").textContent =
+    `第 ${itemsAnswered} / ${CAT_MAX_ITEMS} 题 (自适应)`;
+  document.getElementById("cat-progress-fill").style.width = `${progress * 100}%`;
+  document.getElementById("cat-question-word").textContent = question.word;
+  document.getElementById("cat-question-definition").textContent =
+    question.definition || "（暂无释义，请根据单词本身判断）";
+}
+
+function renderCatResult(result) {
+  document.getElementById("cat-result-summary").textContent = result.summary;
+  document.getElementById("cat-point-estimate").textContent = result.point_estimate;
+  document.getElementById("cat-lower-bound").textContent = result.lower_bound;
+  document.getElementById("cat-upper-bound").textContent = result.upper_bound;
+  document.getElementById("cat-items-answered").textContent = result.items_answered;
+  document.getElementById("cat-theta").textContent = result.theta.toFixed(3);
+  document.getElementById("cat-theta-se").textContent = result.theta_se.toFixed(3);
+  showView("cat-result");
+}
+
+async function startCatTest() {
+  try {
+    const data = await api("/api/cat/start", { method: "POST" });
+    catSessionId = data.session_id;
+    renderCatQuestion(data.first_question, 1);
+    showView("cat-test");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function submitCatAnswer(response) {
+  if (!catCurrentQuestion) return;
+
+  try {
+    const data = await api(`/api/cat/${catSessionId}/answer`, {
+      method: "POST",
+      body: JSON.stringify({
+        word_id: catCurrentQuestion.word_id,
+        response,
+      }),
+    });
+
+    if (data.finished) {
+      const result = await api(`/api/cat/${catSessionId}/result`);
+      renderCatResult(result);
+      return;
+    }
+
+    if (data.next_question) {
+      renderCatQuestion(data.next_question, data.status.items_answered + 1);
+    }
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+document.getElementById("cat-start-btn").addEventListener("click", () => {
+  startCatTest();
+});
+
+document.querySelectorAll(".cat-answer-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const response = btn.dataset.response;
+    submitCatAnswer(response);
+  });
+});
+
+document.getElementById("cat-exit-btn").addEventListener("click", () => {
+  if (confirm("确定要退出测试吗？")) {
+    showView("home");
+  }
+});
+
+document.getElementById("cat-restart-btn").addEventListener("click", () => {
+  startCatTest();
 });

@@ -16,10 +16,12 @@
     <main>
       <section id="home-view" class="card">
         <h2>开始测试</h2>
-        <p>系统会从不同词频层级抽取单词，请判断你是否认识该词。</p>
-        <button id="start-btn" class="btn primary">开始词汇测试</button>
+        <p>请选择测试方式：</p>
+        <button id="start-btn" class="btn primary">标准测试 (分层抽样)</button>
+        <button id="cat-start-btn" class="btn primary">自适应测试 (IRT-CAT)</button>
         <button id="real-batch-btn" class="btn secondary">真实批量估算 (输入词表)</button>
         <button id="batch-btn" class="btn secondary">查看四类学习者估算</button>
+        <button id="text-btn" class="btn secondary">文章词汇量分析</button>
       </section>
 
       <section id="test-view" class="card hidden">
@@ -28,7 +30,7 @@
           <span class="progress-text-inline" id="progress-text">第 1 / 50 题</span>
         </div>
         <div class="progress">
-          <div class="progress-bar"><div id="progress-fill"></div></div>
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
         </div>
         <div class="question-box">
           <p class="level-tag">Level <span id="question-level">1</span></p>
@@ -40,6 +42,59 @@
           <button class="btn warning answer-btn" data-response="unsure">不确定</button>
           <button class="btn danger answer-btn" data-response="unknown">不认识</button>
         </div>
+      </section>
+
+      <section id="cat-test-view" class="card hidden">
+        <div class="test-header">
+          <button id="cat-exit-btn" class="btn-text">← 返回首页</button>
+          <span class="progress-text-inline" id="cat-progress-text">第 1 / 25 题 (自适应)</span>
+        </div>
+        <div class="progress">
+          <div class="progress-bar"><div class="progress-fill" id="cat-progress-fill"></div></div>
+        </div>
+        <div class="question-box">
+          <p class="level-tag">IRT 自适应测试</p>
+          <h2 id="cat-question-word">word</h2>
+          <p id="cat-question-definition" class="definition"></p>
+        </div>
+        <div class="actions">
+          <button class="btn success cat-answer-btn" data-response="know">认识</button>
+          <button class="btn danger cat-answer-btn" data-response="unknown">不认识</button>
+        </div>
+      </section>
+
+      <section id="cat-result-view" class="card hidden">
+        <h2>自适应测试结果</h2>
+        <p id="cat-result-summary" class="result-summary"></p>
+        <div class="result-grid">
+          <div class="metric">
+            <span class="label">点估计</span>
+            <strong id="cat-point-estimate">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">区间下限</span>
+            <strong id="cat-lower-bound">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">区间上限</span>
+            <strong id="cat-upper-bound">0</strong>
+          </div>
+        </div>
+        <div class="result-grid">
+          <div class="metric">
+            <span class="label">作答题目</span>
+            <strong id="cat-items-answered">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">能力值 θ</span>
+            <strong id="cat-theta">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">θ 标准误</span>
+            <strong id="cat-theta-se">0</strong>
+          </div>
+        </div>
+        <button id="cat-restart-btn" class="btn primary">再测一次</button>
       </section>
 
       <section id="result-view" class="card hidden">
@@ -141,6 +196,43 @@
           <p id="unmatched-words" class="unmatched"></p>
         </div>
         <button id="real-batch-restart-btn" class="btn primary">再测一次</button>
+      </section>
+
+      <section id="text-view" class="card hidden">
+        <h2>文档词汇量分析</h2>
+        <p>输入一篇英文文档，系统将自动分析词汇分布并估算词汇量水平。</p>
+        <textarea id="text-input" rows="12" placeholder="请粘贴英文文档..."></textarea>
+        <div class="form-row">
+          <label for="text-confidence">最低认识率假设：</label>
+          <input type="range" id="text-confidence" min="50" max="100" value="85" />
+          <span id="text-confidence-value">85%</span>
+        </div>
+        <div class="actions">
+          <button id="text-submit-btn" class="btn primary">开始分析</button>
+          <button id="text-back-btn" class="btn secondary">返回首页</button>
+        </div>
+      </section>
+
+      <section id="text-result-view" class="card hidden">
+        <h2>文档分析结果</h2>
+        <p id="text-stats-summary" class="result-summary"></p>
+        <h3>词汇量估算</h3>
+        <div class="result-grid">
+          <div class="metric">
+            <span class="label">点估计</span>
+            <strong id="text-point-estimate">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">区间下限</span>
+            <strong id="text-lower-bound">0</strong>
+          </div>
+          <div class="metric">
+            <span class="label">区间上限</span>
+            <strong id="text-upper-bound">0</strong>
+          </div>
+        </div>
+        <p id="text-explanation" class="result-summary"></p>
+        <button id="text-restart-btn" class="btn primary">再测一次</button>
       </section>
     </main>
   </div>

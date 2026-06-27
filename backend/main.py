@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.config import FRONTEND_DIR
 from backend.database import Base, engine
-from backend.routers import batch, test
+from backend.routers import batch, test, text, cat
 
 Base.metadata.create_all(bind=engine)
 
@@ -27,6 +27,8 @@ app.add_middleware(
 
 app.include_router(test.router)
 app.include_router(batch.router)
+app.include_router(text.router)
+app.include_router(cat.router)
 
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")

@@ -16,7 +16,7 @@ from backend.models.entities import Word
 
 router = APIRouter(prefix="/api/batch", tags=["batch"])
 
-# 四类学习者预设认识率（骨架示例，可在报告中调整）
+# 四类学习者预设认识率
 DEFAULT_PROFILES = [
     BatchProfile(name="初学者", know_rate_by_level={1: 0.85, 2: 0.35, 3: 0.10, 4: 0.03, 5: 0.01}),
     BatchProfile(name="四级水平", know_rate_by_level={1: 0.95, 2: 0.80, 3: 0.55, 4: 0.25, 5: 0.08}),
@@ -52,7 +52,8 @@ def _simulate_profile(profile: BatchProfile) -> BatchEstimateItem:
 
 @router.post("/estimate", response_model=BatchEstimateResponse)
 def batch_estimate(profiles: list[BatchProfile] | None = None, db: Session = Depends(get_db)):
-    del db  # 批量模拟不依赖数据库，保留参数便于后续扩展
+    del db #暂时不使用数据库
+
     selected = profiles or DEFAULT_PROFILES
     results = [_simulate_profile(profile) for profile in selected]
     return BatchEstimateResponse(results=results)

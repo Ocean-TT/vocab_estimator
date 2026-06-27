@@ -1,11 +1,4 @@
-"""
-从 data/part*.md 清洗词表，输出 coca_20000.csv。
-
-用法（在项目根目录）:
-    python data/clean.py
-    python data/clean.py --max-rank 20000 --output data/coca_20000.csv
-"""
-
+# 清洗真实的词频表
 from __future__ import annotations
 
 import argparse

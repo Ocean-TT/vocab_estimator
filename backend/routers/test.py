@@ -16,7 +16,6 @@ from backend.services.test_store import get_session_questions, save_answer
 
 router = APIRouter(prefix="/api/test", tags=["test"])
 
-
 def _to_question(session_id: int, question, index: int, total: int) -> QuestionResponse:
     return QuestionResponse(
         session_id=session_id,
@@ -27,7 +26,6 @@ def _to_question(session_id: int, question, index: int, total: int) -> QuestionR
         definition=question.definition,
         level=question.level,
     )
-
 
 @router.post("/start", response_model=StartTestResponse)
 def start_test(db: Session = Depends(get_db)):
@@ -48,7 +46,6 @@ def start_test(db: Session = Depends(get_db)):
         total_questions=len(questions),
         first_question=_to_question(session.id, first, 0, len(questions)),
     )
-
 
 @router.post("/{session_id}/answer", response_model=AnswerResponse)
 def submit_answer(session_id: int, payload: AnswerRequest, db: Session = Depends(get_db)):
