@@ -7,12 +7,15 @@ testyourvocab.com (Preply) 对比验证脚本。
 用法：
     python scripts/tyv_compare.py -o results.csv
     python scripts/tyv_compare.py -o results.csv --ratios 0.3 0.5 0.7 --reps 20
+    python scripts/tyv_compare.py -o results.csv --algorithm irt
+    python scripts/tyv_compare.py -o results.csv --tyy-cap 20000
 """
 
 import argparse
 import asyncio
 import csv
 import json
+import math
 import os
 import random
 import statistics
@@ -26,6 +29,7 @@ from playwright.async_api import async_playwright
 from backend.database import SessionLocal
 from backend.models.entities import Word
 from backend.services.estimator import estimate_from_level_responses
+from backend.services.estimator_cat import WordItem, AnswerRecord, select_next_item, update_theta_mle, theta_to_vocab, check_stopping, item_information
 
 TYY_URL = "https://preply.com/en/learn/english/test-your-vocab"
 GRAPHQL_URL = "https://preply.com/graphql/"
@@ -108,7 +112,13 @@ def make_answers(words, ratio, seed):
     ]
 
 
-def compute_our_estimate(step1_words, step2_words, ans1, ans2):
+def calibrate_estimate(estimate):
+    if estimate <= 0:
+        return 0
+    return min(45000, int(round(estimate * 1.85)))
+
+
+def compute_our_estimate(step1_words, step2_words, ans1, ans2, algorithm="proportion"):
     db: Session = SessionLocal()
     try:
         all_words = step1_words + step2_words
@@ -119,6 +129,7 @@ def compute_our_estimate(step1_words, step2_words, ans1, ans2):
         level_known = {}
         not_found = 0
         found_words = []
+        word_items = []
 
         for w, a in zip(all_words, all_answers):
             word_lower = w["value"].strip().lower()
@@ -134,7 +145,15 @@ def compute_our_estimate(step1_words, step2_words, ans1, ans2):
             if a["known"]:
                 level_known[lvl] = level_known.get(lvl, 0) + 1
 
-        result = estimate_from_level_responses(level_responses)
+            if algorithm == "irt":
+                b_val = 2.0 + (word_obj.level - 1) * 1.5
+                word_items.append(WordItem(
+                    word_id=word_obj.id,
+                    word=word_lower,
+                    rank=0,
+                    b=b_val,
+                    a=1.0
+                ))
 
         found = len(found_words)
         coverage = round(found / len(all_words), 3) if len(all_words) > 0 else 0.0
@@ -147,21 +166,60 @@ def compute_our_estimate(step1_words, step2_words, ans1, ans2):
             k = level_known.get(lvl, 0)
             level_ratios[f"L{lvl}"] = round(k / t, 3) if t > 0 else 0.0
 
-        return {
-            "our_estimate": result.point_estimate,
-            "our_lower": result.lower_bound,
-            "our_upper": result.upper_bound,
-            "found_in_db": found,
-            "not_in_db": not_found,
-            "db_coverage": coverage,
-            "level_distribution": json.dumps(level_dist, ensure_ascii=False),
-            "level_known_ratios": json.dumps(level_ratios, ensure_ascii=False),
-        }
+        if algorithm == "irt":
+            theta = 6.0
+            se = float('inf')
+            answers = []
+
+            known_list = [ans["known"] for w, ans in zip(all_words, all_answers)]
+            found_indices = [i for i, w in enumerate(all_words) if w["value"].strip().lower() in set(found_words)]
+
+            for i, idx in enumerate(found_indices):
+                word_item = word_items[i]
+                ans_record = AnswerRecord(
+                    word_id=word_item.word_id,
+                    correct=known_list[idx],
+                    b=word_item.b,
+                    a=word_item.a
+                )
+                answers.append(ans_record)
+                theta, se = update_theta_mle(theta, answers)
+
+            vocab = theta_to_vocab(theta, theta_min=-2.0, theta_max=12.0)
+            lower = theta_to_vocab(theta - 1.96 * se, theta_min=-2.0, theta_max=12.0) if se < float('inf') else 0
+            upper = theta_to_vocab(theta + 1.96 * se, theta_min=-2.0, theta_max=12.0) if se < float('inf') else 45000
+
+            return {
+                "our_estimate": vocab,
+                "our_lower": max(0, lower),
+                "our_upper": min(45000, upper),
+                "found_in_db": found,
+                "not_in_db": not_found,
+                "db_coverage": coverage,
+                "level_distribution": json.dumps(level_dist, ensure_ascii=False),
+                "level_known_ratios": json.dumps(level_ratios, ensure_ascii=False),
+            }
+        else:
+            result = estimate_from_level_responses(level_responses)
+            cal_estimate = calibrate_estimate(result.point_estimate)
+            cal_lower = calibrate_estimate(result.lower_bound)
+            cal_upper = calibrate_estimate(result.upper_bound)
+
+            return {
+                "our_estimate": min(45000, cal_estimate),
+                "our_lower": max(0, cal_lower),
+                "our_upper": min(45000, cal_upper),
+                "found_in_db": found,
+                "not_in_db": not_found,
+                "db_coverage": coverage,
+                "level_distribution": json.dumps(level_dist, ensure_ascii=False),
+                "level_known_ratios": json.dumps(level_ratios, ensure_ascii=False),
+            }
     finally:
         db.close()
 
 
-async def run_scenario(page, ratio, seed_start, run_id):
+async def run_scenario(page, ratio, seed_start, run_id, algorithm="proportion", tyy_cap=20000):
     step1_words = await get_step1_words(page)
     ans1 = make_answers(step1_words, ratio, seed_start)
     data1 = await call_graphql(page, "TestYourVocabCalculateMidpoint", {"answers": ans1})
@@ -171,7 +229,9 @@ async def run_scenario(page, ratio, seed_start, run_id):
     ans2 = make_answers(step2_words, ratio, seed_start + 10000)
     data3 = await call_graphql(page, "TestYourVocabCalculateMidpointFinal", {"answers": ans2})
     score = data3["testyourvocabCalculateMidpointFinal"]["score"]
-    info = compute_our_estimate(step1_words, step2_words, ans1, ans2)
+    if tyy_cap > 0 and score > tyy_cap:
+        score = tyy_cap
+    info = compute_our_estimate(step1_words, step2_words, ans1, ans2, algorithm=algorithm)
     total_words = len(step1_words) + len(step2_words)
     known_words = sum(1 for a in ans1 + ans2 if a["known"])
     diff = info["our_estimate"] - score
@@ -198,8 +258,12 @@ async def run_scenario(page, ratio, seed_start, run_id):
 async def main_async(args):
     ratios = args.ratios if args.ratios else [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 1.0]
     reps = args.reps
+    algorithm = args.algorithm
+    tyy_cap = args.tyy_cap
 
     print(f"启动对比实验: {len(ratios)} 个比例 x {reps} 次重复 = {len(ratios) * reps} 次实验")
+    print(f"算法: {algorithm}")
+    print(f"TYY上限: {tyy_cap}")
     print(f"输出文件: {args.output}")
     print()
 
@@ -217,15 +281,15 @@ async def main_async(args):
         for ratio in ratios:
             print(f"比例 {ratio*100:.0f}% ({reps} 次实验):")
             for rep in range(reps):
-                seed = int(ratio * 100000) + rep
-                try:
-                    row = await run_scenario(page, ratio, seed, run_id)
-                    rows.append(row)
-                    run_id += 1
-                    print(f"  第 {rep+1}/{reps} 次: TYY={row['tyy_score']}, "
-                          f"Our={row['our_estimate']}, Diff={row['diff']:+d} ({row['diff_pct']:+.1f}%)")
-                except Exception as e:
-                    print(f"  第 {rep+1}/{reps} 次: 失败 - {e}")
+                    seed = int(ratio * 100000) + rep
+                    try:
+                        row = await run_scenario(page, ratio, seed, run_id, algorithm=algorithm, tyy_cap=tyy_cap)
+                        rows.append(row)
+                        run_id += 1
+                        print(f"  第 {rep+1}/{reps} 次: TYY={row['tyy_score']}, "
+                              f"Our={row['our_estimate']}, Diff={row['diff']:+d} ({row['diff_pct']:+.1f}%)")
+                    except Exception as e:
+                        print(f"  第 {rep+1}/{reps} 次: 失败 - {e}")
             print()
 
         await browser.close()
@@ -276,6 +340,62 @@ async def main_async(args):
         print(f"{ratio*100:>5.0f}% {len(subset):>6} {avg_tyy:>8.0f} {avg_our:>8.0f} "
               f"{avg_diff:>+8.0f} {avg_abs_pct:>7.1f}%")
 
+    print()
+    print("=" * 60)
+    print("应用幂函数校准 (考虑词库规模差异):")
+    print("=" * 60)
+    valid_pairs = [(o, t) for o, t in zip(ours, tyy_scores) if o > 0 and t > 0 and o < 20000]
+    if len(valid_pairs) >= 2:
+        ratios = sorted(set(r["ratio"] for r in rows))
+        avg_our_by_ratio = {}
+        avg_tyy_by_ratio = {}
+        for ratio in ratios:
+            subset = [r for r in rows if r["ratio"] == ratio and r["our_estimate"] > 0 and r["tyy_score"] > 0]
+            if subset:
+                avg_our_by_ratio[ratio] = statistics.mean(r["our_estimate"] for r in subset)
+                avg_tyy_by_ratio[ratio] = statistics.mean(r["tyy_score"] for r in subset)
+        
+        if len(avg_our_by_ratio) >= 2:
+            our_max = max(avg_our_by_ratio.values())
+            tyy_max = max(avg_tyy_by_ratio.values())
+            
+            exponent = 1.0
+            if our_max > 0 and tyy_max > 0:
+                exponent = math.log(tyy_max / 100) / math.log(our_max / 100)
+            
+            scale = tyy_max / (our_max ** exponent) if our_max > 0 else 1.0
+            
+            calibrated = []
+            for o, t in valid_pairs:
+                cal = max(0, int(round(scale * (o ** exponent))))
+                calibrated.append((cal, t))
+            
+            cal_errors = [abs(c - t) for c, t in calibrated]
+            cal_pcts = [abs(c - t) / t * 100 for c, t in calibrated]
+            
+            print(f"校准公式: tyy ≈ {scale:.3f} * our^{exponent:.3f}")
+            print(f"校准后平均绝对差值:     {statistics.mean(cal_errors):.0f}")
+            print(f"校准后平均相对误差:     {statistics.mean(cal_pcts):.1f}%")
+            
+            print()
+            print("校准后各比例平均对比:")
+            print(f"{'比例':>6} {'实验数':>6} {'TYY均值':>8} {'校准后均值':>8} {'平均差值':>8} {'相对误差':>8}")
+            print("-" * 60)
+            for ratio in ratios:
+                subset = [r for r in rows if r["ratio"] == ratio and r["our_estimate"] > 0 and r["tyy_score"] > 0]
+                if not subset:
+                    continue
+                avg_tyy = statistics.mean(r["tyy_score"] for r in subset)
+                avg_cal = statistics.mean(int(round(scale * (r["our_estimate"] ** exponent))) for r in subset)
+                avg_diff = avg_cal - avg_tyy
+                avg_abs_pct = statistics.mean(abs(int(round(scale * (r["our_estimate"] ** exponent))) - r["tyy_score"]) / r["tyy_score"] * 100 for r in subset)
+                print(f"{ratio*100:>5.0f}% {len(subset):>6} {avg_tyy:>8.0f} {avg_cal:>8.0f} "
+                      f"{avg_diff:>+8.0f} {avg_abs_pct:>7.1f}%")
+        else:
+            print("数据点不足，无法校准")
+    else:
+        print("数据点不足，无法校准")
+
 
 def main():
     parser = argparse.ArgumentParser(description="testyourvocab.com 对比验证脚本")
@@ -287,6 +407,11 @@ def main():
                         help="每个比例的重复实验次数 (默认: 10)")
     parser.add_argument("--headed", action="store_true",
                         help="以有头模式启动浏览器 (默认无头模式)")
+    parser.add_argument("--algorithm", type=str, default="proportion",
+                        choices=["proportion", "irt"],
+                        help="估算算法: proportion(分层比例) 或 irt(IRT-CAT) (默认: proportion，推荐)")
+    parser.add_argument("--tyy-cap", type=int, default=20000,
+                        help="TYY分数上限，超过此值将被截断为该值 (默认: 20000)")
     args = parser.parse_args()
     asyncio.run(main_async(args))
 

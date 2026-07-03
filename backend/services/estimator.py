@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from backend.config import CONFIDENCE_Z, LEVEL_RANGES
+from backend.config import CONFIDENCE_Z, LEVEL_RANGES, LEVEL_TOTAL_WORDS
 from backend.models.entities import TestAnswer, Word
 
 
@@ -25,8 +25,8 @@ class EstimationResult:
     level_breakdown: list[LevelEstimate]
 
 
-def level_total_words(start_rank: int, end_rank: int) -> int:
-    return end_rank - start_rank + 1
+def level_total_words(level: int) -> int:
+    return LEVEL_TOTAL_WORDS.get(level, 0)
 
 def estimate_from_level_responses(level_responses: dict[int, list[str]]) -> EstimationResult:
     """
@@ -40,7 +40,7 @@ def estimate_from_level_responses(level_responses: dict[int, list[str]]) -> Esti
         # 获取该层级的所有回答
         responses = level_responses.get(level, [])
         sample_size = len(responses)
-        total_words = level_total_words(start_rank, end_rank)
+        total_words = level_total_words(level)
         known_count = sum(1 for r in responses if r in ("know", True))
         rate = known_count / sample_size if sample_size > 0 else 0.0
         known_words = round(total_words * rate)
