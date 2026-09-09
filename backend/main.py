@@ -9,14 +9,16 @@ from backend.config import FRONTEND_DIR
 from backend.database import Base, engine
 from backend.routers import batch, test, text, cat
 
+# 启动时自动建表
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="English Vocabulary Estimator",
-    description="英语词汇量估算工具 - 课程项目骨架",
-    version="0.1.0",
+    description="基于分层抽样与IRT自适应测试的英语词汇量估算工具",
+    version="1.0.0",
 )
 
+# 开发期放开跨域
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,11 +27,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 注册路由：基础测试、批量估算、文本分析、CAT自适应测试
 app.include_router(test.router)
 app.include_router(batch.router)
 app.include_router(text.router)
 app.include_router(cat.router)
 
+# 挂载前端静态文件
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
